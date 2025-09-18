@@ -23,6 +23,29 @@ from modules.models_settings import (
 from modules.utils import gradio
 
 
+def get_predefined_models():
+    """Return a list of predefined popular models for easy selection"""
+    return [
+        "bartowski/JSL-MedLlama-3-8B-v2.0-GGUF",
+        "TheBloke/phi-2-GGUF",
+        "jeiku/Zephyr_beta_32k_7B-Q5_K_S-GGUF",
+        "TheBloke/CapybaraHermes-2.5-Mistral-7B-GGUF",
+
+    ]
+
+
+def get_model_filename_mapping():
+    """Return mapping of model names to their specific filenames"""
+    return {
+        "bartowski/JSL-MedLlama-3-8B-v2.0-GGUF": "JSL-MedLlama-3-8B-v2.0-Q4_K_M.gguf",
+        "TheBloke/phi-2-GGUF": "phi-2.Q4_K_M.gguf",
+        "jeiku/Zephyr_beta_32k_7B-Q5_K_S-GGUF":"zephyr_beta_32k_7b-q5_k_s.gguf ",
+        "TheBloke/CapybaraHermes-2.5-Mistral-7B-GGUF":"capybarahermes-2.5-mistral-7b.Q4_K_M.gguf",
+        # Add more model->filename mappings here as needed
+        # "model/name": "specific-file.gguf",
+    }
+
+
 def create_ui():
     mu = shared.args.multi_user
 
@@ -116,6 +139,14 @@ def create_ui():
 
             with gr.Column():
                 with gr.Tab("Download"):
+                    shared.gradio['predefined_model_dropdown'] = gr.Dropdown(
+                        label="Select from popular models (optional)", 
+                        choices=get_predefined_models(), 
+                        value=None,
+                        info="Choose a popular model from the dropdown, or use the text box below to enter any model name.", 
+                        interactive=not mu,
+                        elem_classes='slim-dropdown'
+                    )
                     shared.gradio['custom_model_menu'] = gr.Textbox(label="Download model or LoRA", info="Enter the Hugging Face username/model path, for instance: facebook/galactica-125m. To specify a branch, add it at the end after a \":\" character like this: facebook/galactica-125m:main. To download a single file, enter its name in the second box.", interactive=not mu)
                     shared.gradio['download_specific_file'] = gr.Textbox(placeholder="File name (for GGUF models)", show_label=False, max_lines=1, interactive=not mu)
                     with gr.Row():
@@ -181,6 +212,24 @@ def create_event_handlers():
     shared.gradio['download_model_button'].click(download_model_wrapper, gradio('custom_model_menu', 'download_specific_file'), gradio('model_status'), show_progress=True)
     shared.gradio['get_file_list'].click(partial(download_model_wrapper, return_links=True), gradio('custom_model_menu', 'download_specific_file'), gradio('model_status'), show_progress=True)
     shared.gradio['customized_template_submit'].click(save_instruction_template, gradio('model_menu', 'customized_template'), gradio('model_status'), show_progress=True)
+    
+    # Event handler for predefined model dropdown - auto-fill both model name and filename
+    def handle_predefined_model_selection(selected_model):
+        if not selected_model:
+            return "", ""
+        
+        # Get the specific filename for this model (if any)
+        filename_mapping = get_model_filename_mapping()
+        specific_filename = filename_mapping.get(selected_model, "")
+        
+        return selected_model, specific_filename
+    
+    shared.gradio['predefined_model_dropdown'].change(
+        handle_predefined_model_selection,
+        gradio('predefined_model_dropdown'),
+        gradio('custom_model_menu', 'download_specific_file'),
+        show_progress=False
+    )
 
 
 def load_model_wrapper(selected_model, loader, autoload=False):
