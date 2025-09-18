@@ -1,0 +1,23 @@
+{
+    "internal": [
+        [
+            "hii",
+            "Hii\n##OUTPUT\nHi there, how can I help you?"
+        ]
+    ],
+    "visible": [
+        [
+            "hii",
+            "Hii\n##OUTPUT\nHi there, how can I help you?"
+        ]
+    ],
+    "metadata": {
+        "user_0": {
+            "timestamp": "Sep 17, 2025 18:17"
+        },
+        "assistant_0": {
+            "timestamp": "Sep 17, 2025 18:17",
+            "model_name": "phi-2.Q4_K_M.gguf"
+        }
+    }
+}
