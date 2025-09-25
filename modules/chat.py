@@ -986,7 +986,27 @@ def generate_chat_reply_wrapper(text, state, regenerate=False, _continue=False):
     Same as above but returns HTML for the UI
     '''
 
+    # Check if model is loaded
+    from modules.utils import check_model_loaded
+    model_is_loaded, model_error_msg = check_model_loaded()
+    if not model_is_loaded:
+        error_msg = f"Model Error: {model_error_msg}"
+        # Create a proper error display
+        error_history = state.get('history', {'internal': [], 'visible': [], 'metadata': {}})
+        error_html = chat_html_wrapper(error_history, state.get('name1', 'You'), state.get('name2', 'Assistant'), state.get('mode', 'chat'), state.get('chat_style', 'cai-chat'), state.get('character_menu', 'None'))
+        # Add error message to the HTML
+        error_html['html'] = error_html['html'] + f'<div class="error-message" style="color: red; padding: 10px; background: #ffe6e6; border: 1px solid #ffcccc; margin: 10px; border-radius: 5px; font-size: 14px;">⚠️ {error_msg}</div>'
+        yield error_html, error_history
+        return
+
     if not character_is_loaded(state):
+        error_msg = "No character is loaded. Please load one under Parameters > Character."
+        # Create a proper error display
+        error_history = state.get('history', {'internal': [], 'visible': [], 'metadata': {}})
+        error_html = chat_html_wrapper(error_history, state.get('name1', 'You'), state.get('name2', 'Assistant'), state.get('mode', 'chat'), state.get('chat_style', 'cai-chat'), state.get('character_menu', 'None'))
+        # Add error message to the HTML
+        error_html['html'] = error_html['html'] + f'<div class="error-message" style="color: red; padding: 10px; background: #ffe6e6; border: 1px solid #ffcccc; margin: 10px; border-radius: 5px; font-size: 14px;">⚠️ {error_msg}</div>'
+        yield error_html, error_history
         return
 
     if state['start_with'] != '' and not _continue:
@@ -1104,10 +1124,19 @@ def start_new_chat(state):
 
 
 def get_history_file_path(unique_id, character, mode):
-    if mode == 'instruct':
-        p = Path(f'user_data/logs/instruct/{unique_id}.json')
+    from modules import shared
+    
+    # Handle PyInstaller environment
+    if hasattr(shared, 'is_pyinstaller') and shared.is_pyinstaller:
+        # In PyInstaller, use current working directory as root
+        root_folder = Path.cwd()
     else:
-        p = Path(f'user_data/logs/chat/{character}/{unique_id}.json')
+        root_folder = Path(__file__).resolve().parent.parent
+    
+    if mode == 'instruct':
+        p = root_folder / f'user_data/logs/instruct/{unique_id}.json'
+    else:
+        p = root_folder / f'user_data/logs/chat/{character}/{unique_id}.json'
 
     return p
 
@@ -1142,14 +1171,23 @@ def rename_history(old_id, new_id, character, mode):
 
 
 def get_paths(state):
+    from modules import shared
+    
+    # Handle PyInstaller environment
+    if hasattr(shared, 'is_pyinstaller') and shared.is_pyinstaller:
+        # In PyInstaller, use current working directory as root
+        root_folder = Path.cwd()
+    else:
+        root_folder = Path(__file__).resolve().parent.parent
+    
     if state['mode'] == 'instruct':
-        return Path('user_data/logs/instruct').glob('*.json')
+        return (root_folder / 'user_data/logs/instruct').glob('*.json')
     else:
         character = state['character_menu']
 
         # Handle obsolete filenames and paths
-        old_p = Path(f'user_data/logs/{character}_persistent.json')
-        new_p = Path(f'user_data/logs/persistent_{character}.json')
+        old_p = root_folder / f'user_data/logs/{character}_persistent.json'
+        new_p = root_folder / f'user_data/logs/persistent_{character}.json'
         if old_p.exists():
             logger.warning(f"Renaming \"{old_p}\" to \"{new_p}\"")
             old_p.rename(new_p)
@@ -1158,10 +1196,10 @@ def get_paths(state):
             unique_id = datetime.now().strftime('%Y%m%d-%H-%M-%S')
             p = get_history_file_path(unique_id, character, state['mode'])
             logger.warning(f"Moving \"{new_p}\" to \"{p}\"")
-            p.parent.mkdir(exist_ok=True)
+            p.parent.mkdir(parents=True, exist_ok=True)
             new_p.rename(p)
 
-        return Path(f'user_data/logs/chat/{character}').glob('*.json')
+        return (root_folder / f'user_data/logs/chat/{character}').glob('*.json')
 
 
 def find_all_histories(state):
@@ -1286,7 +1324,16 @@ def get_chat_state_key(character, mode):
 
 def load_last_chat_state():
     """Load the last chat state from file"""
-    state_file = Path('user_data/logs/chat_state.json')
+    from modules import shared
+    
+    # Handle PyInstaller environment
+    if hasattr(shared, 'is_pyinstaller') and shared.is_pyinstaller:
+        # In PyInstaller, use current working directory as root
+        root_folder = Path.cwd()
+    else:
+        root_folder = Path(__file__).resolve().parent.parent
+    
+    state_file = root_folder / 'user_data/logs/chat_state.json'
     if state_file.exists():
         try:
             with open(state_file, 'r', encoding='utf-8') as f:
@@ -1306,8 +1353,15 @@ def save_last_chat_state(character, mode, unique_id):
     key = get_chat_state_key(character, mode)
     state["last_chats"][key] = unique_id
 
-    state_file = Path('user_data/logs/chat_state.json')
-    state_file.parent.mkdir(exist_ok=True)
+    # Handle PyInstaller environment
+    if hasattr(shared, 'is_pyinstaller') and shared.is_pyinstaller:
+        # In PyInstaller, use current working directory as root
+        root_folder = Path.cwd()
+    else:
+        root_folder = Path(__file__).resolve().parent.parent
+    
+    state_file = root_folder / 'user_data/logs/chat_state.json'
+    state_file.parent.mkdir(parents=True, exist_ok=True)
     with open(state_file, 'w', encoding='utf-8') as f:
         f.write(json.dumps(state, indent=2))
 
@@ -1785,9 +1839,7 @@ def handle_delete_chat_confirm_click(state):
     return [
         history,
         html,
-        unique_id,
-        gr.update(visible=False),
-        gr.update(visible=True),
+        unique_id
     ]
 
 

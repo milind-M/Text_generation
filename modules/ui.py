@@ -20,28 +20,40 @@ _last_extensions = None
 _last_show_controls = None
 _last_theme_state = None
 
-with open(Path(__file__).resolve().parent / '../css/NotoSans/stylesheet.css', 'r', encoding='utf-8') as f:
-    css = f.read()
-with open(Path(__file__).resolve().parent / '../css/main.css', 'r', encoding='utf-8') as f:
-    css += f.read()
-with open(Path(__file__).resolve().parent / '../css/katex/katex.min.css', 'r', encoding='utf-8') as f:
-    css += f.read()
-with open(Path(__file__).resolve().parent / '../css/highlightjs/highlightjs-copy.min.css', 'r', encoding='utf-8') as f:
-    css += f.read()
-with open(Path(__file__).resolve().parent / '../js/main.js', 'r', encoding='utf-8') as f:
-    js = f.read()
-with open(Path(__file__).resolve().parent / '../js/global_scope_js.js', 'r', encoding='utf-8') as f:
-    global_scope_js = f.read()
-with open(Path(__file__).resolve().parent / '../js/save_files.js', 'r', encoding='utf-8') as f:
-    save_files_js = f.read()
-with open(Path(__file__).resolve().parent / '../js/switch_tabs.js', 'r', encoding='utf-8') as f:
-    switch_tabs_js = f.read()
-with open(Path(__file__).resolve().parent / '../js/show_controls.js', 'r', encoding='utf-8') as f:
-    show_controls_js = f.read()
-with open(Path(__file__).resolve().parent / '../js/update_big_picture.js', 'r', encoding='utf-8') as f:
-    update_big_picture_js = f.read()
-with open(Path(__file__).resolve().parent / '../js/dark_theme.js', 'r', encoding='utf-8') as f:
-    dark_theme_js = f.read()
+def get_asset_path():
+    """Get the correct asset path for both development and PyInstaller environments"""
+    import sys
+    if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
+        # Running in PyInstaller bundle
+        return Path(sys._MEIPASS)
+    else:
+        # Running in development
+        return Path(__file__).resolve().parent.parent
+
+def safe_read_file(file_path, fallback_content="/* File not found */"):
+    """Safely read a file with fallback content if file doesn't exist"""
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            return f.read()
+    except (FileNotFoundError, PermissionError, UnicodeDecodeError) as e:
+        print(f"Warning: Could not read {file_path}: {e}")
+        return fallback_content
+
+# Load CSS and JS files with proper path resolution
+asset_path = get_asset_path()
+
+css = safe_read_file(asset_path / 'css/NotoSans/stylesheet.css')
+css += safe_read_file(asset_path / 'css/main.css')
+css += safe_read_file(asset_path / 'css/katex/katex.min.css')
+css += safe_read_file(asset_path / 'css/highlightjs/highlightjs-copy.min.css')
+
+js = safe_read_file(asset_path / 'js/main.js', "// JavaScript file not found")
+global_scope_js = safe_read_file(asset_path / 'js/global_scope_js.js', "// JavaScript file not found")
+save_files_js = safe_read_file(asset_path / 'js/save_files.js', "// JavaScript file not found")
+switch_tabs_js = safe_read_file(asset_path / 'js/switch_tabs.js', "// JavaScript file not found")
+show_controls_js = safe_read_file(asset_path / 'js/show_controls.js', "// JavaScript file not found")
+update_big_picture_js = safe_read_file(asset_path / 'js/update_big_picture.js', "// JavaScript file not found")
+dark_theme_js = safe_read_file(asset_path / 'js/dark_theme.js', "// JavaScript file not found")
 
 refresh_symbol = '🔄'
 delete_symbol = '🗑️'

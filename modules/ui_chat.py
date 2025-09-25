@@ -169,7 +169,15 @@ def create_character_settings_ui():
 
             with gr.Column(scale=1):
                 shared.gradio['character_picture'] = gr.Image(label='Character picture', type='pil', interactive=not mu)
-                shared.gradio['your_picture'] = gr.Image(label='Your picture', type='pil', value=Image.open(Path('user_data/cache/pfp_me.png')) if Path('user_data/cache/pfp_me.png').exists() else None, interactive=not mu)
+                # Get proper path for user_data
+                def get_user_data_path():
+                    if hasattr(shared, 'is_pyinstaller') and shared.is_pyinstaller:
+                        return Path.cwd() / 'user_data'
+                    else:
+                        return Path(__file__).resolve().parent.parent / 'user_data'
+                
+                pfp_me_path = get_user_data_path() / 'cache' / 'pfp_me.png'
+                shared.gradio['your_picture'] = gr.Image(label='Your picture', type='pil', value=Image.open(pfp_me_path) if pfp_me_path.exists() else None, interactive=not mu)
 
 
 def create_chat_settings_ui():
@@ -268,6 +276,12 @@ def create_event_handlers():
     shared.gradio['Start new chat'].click(
         ui.gather_interface_values, gradio(shared.input_elements), gradio('interface_state')).then(
         chat.handle_start_new_chat_click, gradio('interface_state'), gradio('history', 'display', 'unique_id'), show_progress=False)
+
+    shared.gradio['delete_chat'].click(
+        lambda: gr.update(visible=True), None, gradio('delete-chat-row'), show_progress=False)
+    
+    shared.gradio['delete_chat-cancel'].click(
+        lambda: gr.update(visible=False), None, gradio('delete-chat-row'), show_progress=False)
 
     shared.gradio['delete_chat-confirm'].click(
         ui.gather_interface_values, gradio(shared.input_elements), gradio('interface_state')).then(

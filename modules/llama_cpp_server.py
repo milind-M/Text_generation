@@ -94,42 +94,155 @@ class LlamaServer:
             "ignore_eos": state["ban_eos_token"],
         }
 
-        # DRY
-        dry_sequence_breakers = state['dry_sequence_breakers']
-        if not dry_sequence_breakers.startswith("["):
-            dry_sequence_breakers = "[" + dry_sequence_breakers + "]"
+        # DRY - handle sequence breakers safely
+        try:
+            dry_sequence_breakers = state.get('dry_sequence_breakers', '["\\n", ":", ";", ".", "!", "?", ","]')
+            if isinstance(dry_sequence_breakers, str):
+                if not dry_sequence_breakers.strip().startswith("["):
+                    # If it's not a JSON array, wrap it
+                    if dry_sequence_breakers.strip():
+                        # Split by common delimiters and create array
+                        items = [item.strip('"\' ') for item in dry_sequence_breakers.split(',') if item.strip()]
+                        dry_sequence_breakers = json.dumps(items)
+                    else:
+                        dry_sequence_breakers = '["\\n", ":", ";", ".", "!", "?", ","]'
+                
+                # Parse the JSON safely
+                parsed_breakers = json.loads(dry_sequence_breakers)
+            elif isinstance(dry_sequence_breakers, list):
+                parsed_breakers = dry_sequence_breakers
+            else:
+                # Fallback to default
+                parsed_breakers = ["\n", ":", ";", ".", "!", "?", ","]
+                
+            payload["dry_sequence_breakers"] = parsed_breakers
+        except (json.JSONDecodeError, ValueError) as e:
+            logger.warning(f"Error parsing dry_sequence_breakers: {e}, using defaults")
+            payload["dry_sequence_breakers"] = ["\n", ":", ";", ".", "!", "?", ","]
 
-        dry_sequence_breakers = json.loads(dry_sequence_breakers)
-        payload["dry_sequence_breakers"] = dry_sequence_breakers
+        # Sampler order - handle safely
+        if state.get("sampler_priority"):
+            try:
+                samplers = state["sampler_priority"]
+                if isinstance(samplers, str):
+                    samplers = [s.strip() for s in samplers.split("\n") if s.strip()]
+                elif not isinstance(samplers, list):
+                    samplers = []
+                
+                filtered_samplers = []
+                penalty_found = False
+                
+                for s in samplers:
+                    s_clean = str(s).strip().lower()
+                    if s_clean in ["dry", "top_k", "top_p", "top_n_sigma", "min_p", "temperature", "xtc"]:
+                        filtered_samplers.append(s_clean)
+                    elif s_clean == "typical_p":
+                        filtered_samplers.append("typ_p")
+                    elif not penalty_found and s_clean == "repetition_penalty":
+                        filtered_samplers.append("penalties")
+                        penalty_found = True
 
-        # Sampler order
-        if state["sampler_priority"]:
-            samplers = state["sampler_priority"]
-            samplers = samplers.split("\n") if isinstance(samplers, str) else samplers
-            filtered_samplers = []
+                # Move temperature to the end if temperature_last is true and temperature exists in the list
+                if state.get("temperature_last") and "temperature" in filtered_samplers:
+                    filtered_samplers.remove("temperature")
+                    filtered_samplers.append("temperature")
 
-            penalty_found = False
-            for s in samplers:
-                if s.strip() in ["dry", "top_k", "top_p", "top_n_sigma", "min_p", "temperature", "xtc"]:
-                    filtered_samplers.append(s.strip())
-                elif s.strip() == "typical_p":
-                    filtered_samplers.append("typ_p")
-                elif not penalty_found and s.strip() == "repetition_penalty":
-                    filtered_samplers.append("penalties")
-                    penalty_found = True
+                if filtered_samplers:  # Only set if we have valid samplers
+                    payload["samplers"] = filtered_samplers
+            except Exception as e:
+                logger.warning(f"Error processing sampler_priority: {e}, skipping custom sampler order")
 
-            # Move temperature to the end if temperature_last is true and temperature exists in the list
-            if state["temperature_last"] and "temperature" in samplers:
-                samplers.remove("temperature")
-                samplers.append("temperature")
-
-            payload["samplers"] = filtered_samplers
-
-        if state['custom_token_bans']:
-            to_ban = [[int(token_id), False] for token_id in state['custom_token_bans'].split(',')]
-            payload["logit_bias"] = to_ban
+        # Custom token bans - handle safely
+        if state.get('custom_token_bans'):
+            try:
+                token_bans = state['custom_token_bans']
+                if isinstance(token_bans, str) and token_bans.strip():
+                    # Parse comma-separated token IDs
+                    token_ids = []
+                    for token_str in token_bans.split(','):
+                        token_str = token_str.strip()
+                        if token_str.isdigit():
+                            token_ids.append([int(token_str), False])
+                        elif token_str:  # Non-empty, non-numeric
+                            logger.warning(f"Ignoring invalid token ban: {token_str}")
+                    
+                    if token_ids:
+                        payload["logit_bias"] = token_ids
+                elif isinstance(token_bans, list):
+                    payload["logit_bias"] = token_bans
+            except (ValueError, TypeError) as e:
+                logger.warning(f"Error processing custom_token_bans: {e}, skipping token bans")
 
         return payload
+
+    def _fix_payload_issues(self, payload):
+        """Fix common payload issues that cause HTTP 400 errors"""
+        fixed_payload = payload.copy()
+        
+        # Fix DRY sequence breakers if they're malformed
+        if 'dry_sequence_breakers' in fixed_payload:
+            try:
+                if not isinstance(fixed_payload['dry_sequence_breakers'], list):
+                    # Reset to safe default
+                    fixed_payload['dry_sequence_breakers'] = ["\n", ":", ";", ".", "!", "?", ","]
+                    logger.warning("Fixed malformed dry_sequence_breakers")
+            except Exception:
+                fixed_payload['dry_sequence_breakers'] = ["\n", ":", ";", ".", "!", "?", ","]
+                logger.warning("Reset dry_sequence_breakers to default")
+        
+        # Fix sampler priority if malformed
+        if 'samplers' in fixed_payload and fixed_payload['samplers']:
+            valid_samplers = ["top_k", "top_p", "min_p", "temperature", "typ_p", "penalties", "dry", "xtc"]
+            fixed_samplers = [s for s in fixed_payload['samplers'] if s in valid_samplers]
+            if len(fixed_samplers) != len(fixed_payload['samplers']):
+                fixed_payload['samplers'] = fixed_samplers
+                logger.warning(f"Fixed invalid samplers, kept: {fixed_samplers}")
+        
+        # Ensure numeric values are valid
+        numeric_fields = [
+            'temperature', 'top_k', 'top_p', 'min_p', 'typical_p', 'repeat_penalty',
+            'repeat_last_n', 'presence_penalty', 'frequency_penalty', 'mirostat',
+            'mirostat_tau', 'mirostat_eta', 'seed', 'n_predict'
+        ]
+        
+        for field in numeric_fields:
+            if field in fixed_payload:
+                try:
+                    # Ensure the value is a valid number
+                    if field == 'seed' and (fixed_payload[field] < 0 or fixed_payload[field] > 2**31 - 1):
+                        fixed_payload[field] = abs(hash(str(fixed_payload[field]))) % (2**31 - 1)
+                        logger.warning(f"Fixed invalid seed value")
+                    elif field in ['top_k', 'repeat_last_n', 'n_predict'] and fixed_payload[field] < 0:
+                        fixed_payload[field] = 0
+                        logger.warning(f"Fixed negative {field} value")
+                    elif field in ['temperature', 'top_p', 'min_p', 'typical_p'] and fixed_payload[field] <= 0:
+                        fixed_payload[field] = 0.1  # Set to small positive value
+                        logger.warning(f"Fixed zero/negative {field} value")
+                except (ValueError, TypeError):
+                    # Set default values for invalid numeric fields
+                    defaults = {
+                        'temperature': 0.7, 'top_k': 40, 'top_p': 0.9, 'min_p': 0.05,
+                        'typical_p': 1.0, 'repeat_penalty': 1.1, 'repeat_last_n': 64,
+                        'presence_penalty': 0.0, 'frequency_penalty': 0.0, 'mirostat': 0,
+                        'mirostat_tau': 5.0, 'mirostat_eta': 0.1, 'seed': 42, 'n_predict': 100
+                    }
+                    if field in defaults:
+                        fixed_payload[field] = defaults[field]
+                        logger.warning(f"Reset {field} to default value: {defaults[field]}")
+        
+        # Fix empty prompt issue
+        if 'prompt' in fixed_payload:
+            if isinstance(fixed_payload['prompt'], list) and not fixed_payload['prompt']:
+                logger.warning("Fixed empty prompt array, using fallback")
+                fixed_payload['prompt'] = "Hello"  # Simple fallback
+            elif isinstance(fixed_payload['prompt'], str) and not fixed_payload['prompt'].strip():
+                logger.warning("Fixed empty prompt string, using fallback")
+                fixed_payload['prompt'] = "Hello"  # Simple fallback
+        
+        # Remove any None values that might cause issues
+        fixed_payload = {k: v for k, v in fixed_payload.items() if v is not None}
+        
+        return fixed_payload
 
     def _process_images_for_generation(self, state: dict) -> List[Any]:
         """
@@ -178,7 +291,20 @@ class LlamaServer:
             # Text only case
             token_ids = self.encode(prompt, add_bos_token=state["add_bos_token"])
             self.last_prompt_token_count = len(token_ids)
-            payload["prompt"] = token_ids
+            
+            # Check if tokenization failed and fallback to string prompt
+            if not token_ids and prompt.strip():
+                logger.warning(f"Tokenization failed for prompt, using string format as fallback")
+                payload["prompt"] = prompt  # Use string prompt as fallback
+                # Estimate token count
+                self.last_prompt_token_count = len(prompt.split()) * 1.3  # Rough estimation
+            elif not token_ids:
+                logger.error(f"Empty prompt detected: '{prompt}'")
+                # Use a minimal fallback prompt to prevent empty request
+                payload["prompt"] = "Hello"  # Minimal fallback
+                self.last_prompt_token_count = 1
+            else:
+                payload["prompt"] = token_ids
 
         if state['auto_max_new_tokens']:
             max_new_tokens = state['truncation_length'] - self.last_prompt_token_count
@@ -200,6 +326,27 @@ class LlamaServer:
         # Make the generation request
         response = self.session.post(url, json=payload, stream=True)
         try:
+            if response.status_code == 400:
+                # Handle 400 errors with detailed error info
+                try:
+                    error_data = response.json()
+                    logger.error(f"HTTP 400 Bad Request: {error_data}")
+                    logger.error(f"Request URL: {url}")
+                    logger.error(f"Request payload (without prompt): {pprint.pformat({k: v for k, v in payload.items() if k != 'prompt'})}")
+                    if 'prompt' in payload and isinstance(payload['prompt'], list) and len(payload['prompt']) > 10:
+                        logger.error(f"Prompt tokens (first 10): {payload['prompt'][:10]}...")
+                    elif 'prompt' in payload:
+                        logger.error(f"Prompt: {payload['prompt']}")
+                    
+                    # Try to fix common issues
+                    fixed_payload = self._fix_payload_issues(payload.copy())
+                    if fixed_payload != payload:
+                        logger.info("Attempting with fixed payload...")
+                        response = self.session.post(url, json=fixed_payload, stream=True)
+                        payload = fixed_payload
+                except Exception as e:
+                    logger.error(f"Error parsing 400 response: {e}")
+            
             response.raise_for_status()  # Raise an exception for HTTP errors
 
             full_text = ""

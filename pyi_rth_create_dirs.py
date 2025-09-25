@@ -25,6 +25,8 @@ def create_required_dirs():
         'user_data/grammars',
         'user_data/instruction-templates',
         'user_data/logs',
+        'user_data/logs/chat',
+        'user_data/logs/instruct',
         'user_data/logs/notebook',
         'user_data/mmproj',
         'user_data/presets',

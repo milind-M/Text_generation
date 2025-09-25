@@ -39,32 +39,70 @@ def minify_css(css: str) -> str:
     return css
 
 
-with open(Path(__file__).resolve().parent / '../css/html_readable_style.css', 'r', encoding='utf-8') as f:
-    readable_css = f.read()
-with open(Path(__file__).resolve().parent / '../css/html_instruct_style.css', 'r', encoding='utf-8') as f:
-    instruct_css = f.read()
+# Helper function to get correct CSS path for PyInstaller
+def get_css_path():
+    """Get the correct CSS path for both development and PyInstaller environments"""
+    import sys
+    if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
+        # Running in PyInstaller bundle - CSS files are in _internal/css
+        return Path(sys._MEIPASS) / 'css'
+    else:
+        # Running in development
+        return Path(__file__).resolve().parent / '../css'
 
-# Custom chat styles
+# Global variables to store CSS content
+readable_css = None
+instruct_css = None
 chat_styles = {}
-for k in get_available_chat_styles():
-    with open(Path(f'css/chat_style-{k}.css'), 'r', encoding='utf-8') as f:
-        chat_styles[k] = f.read()
 
-# Handle styles that derive from other styles
-for k in chat_styles:
-    lines = chat_styles[k].split('\n')
-    input_string = lines[0]
-    match = re.search(r'chat_style-([a-z\-]*)\.css', input_string)
+def load_css_files():
+    """Lazy load CSS files when needed"""
+    global readable_css, instruct_css, chat_styles
+    
+    if readable_css is not None:  # Already loaded
+        return
+    
+    css_base_path = get_css_path()
+    
+    # Load basic CSS files
+    try:
+        with open(css_base_path / 'html_readable_style.css', 'r', encoding='utf-8') as f:
+            readable_css = f.read()
+        with open(css_base_path / 'html_instruct_style.css', 'r', encoding='utf-8') as f:
+            instruct_css = f.read()
+    except FileNotFoundError as e:
+        print(f"Warning: Could not load CSS files: {e}")
+        readable_css = "/* CSS not found */"
+        instruct_css = "/* CSS not found */"
+        return
 
-    if match:
-        style = match.group(1)
-        chat_styles[k] = chat_styles.get(style, '') + '\n\n' + '\n'.join(lines[1:])
+    # Load custom chat styles
+    try:
+        for k in get_available_chat_styles():
+            try:
+                with open(css_base_path / f'chat_style-{k}.css', 'r', encoding='utf-8') as f:
+                    chat_styles[k] = f.read()
+            except FileNotFoundError:
+                print(f"Warning: Could not load chat style {k}")
+                chat_styles[k] = "/* CSS not found */"
+    except Exception as e:
+        print(f"Warning: Error loading chat styles: {e}")
 
-# Reduce the size of the CSS sources above
-readable_css = minify_css(readable_css)
-instruct_css = minify_css(instruct_css)
-for k in chat_styles:
-    chat_styles[k] = minify_css(chat_styles[k])
+    # Handle styles that derive from other styles
+    for k in chat_styles:
+        lines = chat_styles[k].split('\n')
+        input_string = lines[0]
+        match = re.search(r'chat_style-([a-z\-]*)\.css', input_string)
+
+        if match:
+            style = match.group(1)
+            chat_styles[k] = chat_styles.get(style, '') + '\n\n' + '\n'.join(lines[1:])
+
+    # Reduce the size of the CSS sources above
+    readable_css = minify_css(readable_css)
+    instruct_css = minify_css(instruct_css)
+    for k in chat_styles:
+        chat_styles[k] = minify_css(chat_styles[k])
 
 
 def fix_newlines(string):
@@ -383,6 +421,7 @@ def convert_to_markdown_wrapped(string, message_id=None, use_cache=True):
 
 
 def generate_basic_html(string):
+    load_css_files()  # Ensure CSS files are loaded
     convert_to_markdown.cache_clear()
     string = convert_to_markdown(string)
     string = f'<style>{readable_css}</style><div class="readable-container">{string}</div>'
@@ -560,6 +599,7 @@ def actions_html(history, i, role, info_message=""):
 
 
 def generate_instruct_html(history, last_message_only=False):
+    load_css_files()  # Ensure CSS files are loaded
     if not last_message_only:
         output = f'<style>{instruct_css}</style><div class="chat" id="chat" data-mode="instruct"><div class="messages">'
     else:
@@ -628,6 +668,7 @@ def get_character_image_with_cache_buster():
 
 
 def generate_cai_chat_html(history, name1, name2, style, character, reset_cache=False, last_message_only=False):
+    load_css_files()  # Ensure CSS files are loaded
     if not last_message_only:
         output = f'<style>{chat_styles[style]}</style><div class="chat" id="chat"><div class="messages">'
     else:

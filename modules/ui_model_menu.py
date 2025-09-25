@@ -482,3 +482,4 @@ def format_file_size(size_bytes):
         return f"{s:.2f} {size_names[i]}"
     else:
         return f"{s:.1f} {size_names[i]}"
+    

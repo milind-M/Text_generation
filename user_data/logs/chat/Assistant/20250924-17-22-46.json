@@ -1,0 +1,71 @@
+{
+    "internal": [
+        [
+            "<|BEGIN-VISIBLE-CHAT|>",
+            "How can I help you today?"
+        ],
+        [
+            "hii",
+            "Hello! I am here to assist you. How may I be of service today?"
+        ],
+        [
+            "What is this document about?",
+            "The document is a sample purchase recommendation report. It provides insights into the sales of a particular product or service. The report includes data on the safe price, sales rank trend, internal sales rate, profit/unit, and a recommendation on whether to order more units. I recommend you to order 200 units, as the sales rank trend is improving and the profit/unit is $4.50."
+        ],
+        [
+            "What is the internal Sales rate of science basics",
+            "The internal Sales rate of science basics is 50 units/month."
+        ]
+    ],
+    "visible": [
+        [
+            "",
+            "How can I help you today?"
+        ],
+        [
+            "hii",
+            "Hello! I am here to assist you. How may I be of service today?"
+        ],
+        [
+            "What is this document about?",
+            "The document is a sample purchase recommendation report. It provides insights into the sales of a particular product or service. The report includes data on the safe price, sales rank trend, internal sales rate, profit/unit, and a recommendation on whether to order more units. I recommend you to order 200 units, as the sales rank trend is improving and the profit/unit is $4.50."
+        ],
+        [
+            "What is the internal Sales rate of science basics",
+            "The internal Sales rate of science basics is 50 units/month."
+        ]
+    ],
+    "metadata": {
+        "assistant_0": {
+            "timestamp": "Sep 24, 2025 17:22"
+        },
+        "user_1": {
+            "timestamp": "Sep 24, 2025 17:27"
+        },
+        "assistant_1": {
+            "timestamp": "Sep 24, 2025 17:27",
+            "model_name": "phi-2.Q4_K_M.gguf"
+        },
+        "user_2": {
+            "timestamp": "Sep 24, 2025 17:27",
+            "attachments": [
+                {
+                    "name": "sample_purchase_recommendation.pdf",
+                    "type": "application/pdf",
+                    "content": "Sample Purchase Recommendation Report\nISBN\nTitle\nSafe Price Check\nSales Rank Trend\nInternal Sales Rate\nProfit/Unit (USD)\nRecommendation\nOrder Qty (Next 4 Months)\n9781234567890\nData Science Basics\n■ Safe\n■ Improving\n50 units/month\n$4.50\n■ Yes\n200 units\n9789876543210\nPython for Beginners\n■ Not Safe\n■ Worsening\n10 units/month\n$1.20\n■ No\n0\n9781111111111\nAdvanced AI Guide\n■ Safe\n■ Improving\n30 units/month\n$6.00\n■ Yes\n120 units\n9782222222222\nCloud Computing 101\n■ Safe\n■ Improving\n5 units/month\n$2.00\n■ No (Profit < $3)\n0\n9783333333333\nMachine Learning Pro\n■ Safe\n■ Improving (10+ drops)\n40 units/month\n$5.50\n■ Yes\n160 units"
+                }
+            ]
+        },
+        "assistant_2": {
+            "timestamp": "Sep 24, 2025 17:27",
+            "model_name": "phi-2.Q4_K_M.gguf"
+        },
+        "user_3": {
+            "timestamp": "Sep 24, 2025 17:28"
+        },
+        "assistant_3": {
+            "timestamp": "Sep 24, 2025 17:28",
+            "model_name": "phi-2.Q4_K_M.gguf"
+        }
+    }
+}

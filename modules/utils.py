@@ -20,18 +20,30 @@ def save_file(fname, contents):
         logger.error('File name is empty!')
         return
 
-    root_folder = Path(__file__).resolve().parent.parent
-    abs_path_str = os.path.abspath(fname)
-    rel_path_str = os.path.relpath(abs_path_str, root_folder)
-    rel_path = Path(rel_path_str)
-    if rel_path.parts[0] == '..':
-        logger.error(f'Invalid file path: \"{fname}\"')
-        return
-
-    with open(abs_path_str, 'w', encoding='utf-8') as f:
-        f.write(contents)
-
-    logger.info(f'Saved \"{abs_path_str}\".')
+    try:
+        # Handle PyInstaller environment
+        if hasattr(shared, 'is_pyinstaller') and shared.is_pyinstaller:
+            # In PyInstaller, use current working directory as root
+            root_folder = Path.cwd()
+        else:
+            root_folder = Path(__file__).resolve().parent.parent
+        
+        # Try direct path first
+        file_path = Path(fname)
+        if not file_path.is_absolute():
+            file_path = root_folder / fname
+            
+        # Ensure parent directory exists
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        # Write file
+        with open(file_path, 'w', encoding='utf-8') as f:
+            f.write(contents)
+        
+        logger.info(f'Saved "{file_path}".')
+        
+    except Exception as e:
+        logger.error(f'Failed to save file "{fname}": {e}')
 
 
 def delete_file(fname):
@@ -39,17 +51,28 @@ def delete_file(fname):
         logger.error('File name is empty!')
         return
 
-    root_folder = Path(__file__).resolve().parent.parent
-    abs_path_str = os.path.abspath(fname)
-    rel_path_str = os.path.relpath(abs_path_str, root_folder)
-    rel_path = Path(rel_path_str)
-    if rel_path.parts[0] == '..':
-        logger.error(f'Invalid file path: \"{fname}\"')
-        return
-
-    if rel_path.exists():
-        rel_path.unlink()
-        logger.info(f'Deleted \"{fname}\".')
+    try:
+        # Handle PyInstaller environment
+        if hasattr(shared, 'is_pyinstaller') and shared.is_pyinstaller:
+            # In PyInstaller, use current working directory as root
+            root_folder = Path.cwd()
+        else:
+            root_folder = Path(__file__).resolve().parent.parent
+        
+        # Try direct path first
+        file_path = Path(fname)
+        if not file_path.is_absolute():
+            file_path = root_folder / fname
+            
+        # Check if file exists and delete
+        if file_path.exists():
+            file_path.unlink()
+            logger.info(f'Deleted "{fname}".')
+        else:
+            logger.warning(f'File not found: "{fname}"')
+            
+    except Exception as e:
+        logger.error(f'Failed to delete file "{fname}": {e}')
 
 
 def current_time():
@@ -236,7 +259,17 @@ def get_datasets(path: str, ext: str):
 
 
 def get_available_chat_styles():
-    return sorted(set(('-'.join(k.stem.split('-')[1:]) for k in Path('css').glob('chat_style*.css'))), key=natural_keys)
+    import sys
+    # Get the correct CSS path for both development and PyInstaller environments
+    if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
+        css_dir = Path(sys._MEIPASS) / 'css'
+    else:
+        css_dir = Path('css')
+    
+    if not css_dir.exists():
+        return []
+    
+    return sorted(set(('-'.join(k.stem.split('-')[1:]) for k in css_dir.glob('chat_style*.css'))), key=natural_keys)
 
 
 def get_available_grammars():

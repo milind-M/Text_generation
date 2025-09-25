@@ -11,6 +11,9 @@ import yaml
 from modules.logging_colors import logger
 from modules.presets import default_preset
 
+# Detect if running in PyInstaller bundle
+is_pyinstaller = getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS')
+
 # Model variables
 model = None
 tokenizer = None
