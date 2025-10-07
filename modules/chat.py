@@ -758,6 +758,14 @@ def chatbot_wrapper(text, state, regenerate=False, _continue=False, loading_mess
     output = apply_extensions('history', output)
     state = apply_extensions('state', state)
 
+    # Safety guard: avoid sending an empty prompt on first turn
+    if not (regenerate or _continue):
+        is_first_turn = len(output.get('internal', [])) == 0
+        if is_first_turn and (not text or not text.strip()) and len(files) == 0:
+            # Simply return current history without calling the backend
+            yield output
+            return
+
     # Handle GPT-OSS as a special case
     if '<|channel|>final<|message|>' in state['instruction_template_str']:
         state['skip_special_tokens'] = False
@@ -869,6 +877,10 @@ def chatbot_wrapper(text, state, regenerate=False, _continue=False, loading_mess
     if prompt is None:
         prompt = generate_chat_prompt(text, state, **kwargs)
 
+    # Fallback: if templating returned an empty prompt but user typed something, use raw text
+    if (not prompt or not str(prompt).strip()) and (text and str(text).strip()):
+        prompt = str(text).strip()
+
     # Add timestamp for assistant's response at the start of generation
     update_message_metadata(output['metadata'], "assistant", row_idx, timestamp=get_current_timestamp(), model_name=shared.model_name)
 
@@ -914,6 +926,12 @@ def chatbot_wrapper(text, state, regenerate=False, _continue=False, loading_mess
 
         if is_stream:
             yield output
+
+    # Post-loop safety: if nothing was written (e.g., single empty first chunk), write the final reply once
+    if reply is not None and (output['visible'][-1][1] == '' or output['internal'][-1][1] == ''):
+        final_visible = html.escape(re.sub("(<USER>|<user>|{{user}})", state['name1'], reply)) if state['mode'] in ['chat', 'chat-instruct'] else html.escape(reply)
+        output['internal'][-1] = [text, reply.lstrip(' ')]
+        output['visible'][-1] = [visible_text, final_visible.lstrip(' ')]
 
     if _continue:
         # Reprocess the entire internal text for extensions (like translation)

@@ -245,6 +245,28 @@ function removeLastClick() {
 }
 
 function handleMorphdomUpdate(data) {
+  // Fallback if morphdom is not available: do direct DOM updates
+  try {
+    if (typeof morphdom === 'undefined') {
+      if (data && data.last_message_only) {
+        const messages = document.querySelector('#chat .messages');
+        if (messages && messages.lastElementChild) {
+          messages.lastElementChild.outerHTML = data.html;
+        }
+      } else if (data && data.html !== undefined) {
+        const container = document.getElementById('chat')?.parentNode;
+        if (container) {
+          container.innerHTML = "<div class=\"prose svelte-1ybaih5\">" + data.html + "</div>";
+        }
+      }
+      return;
+    }
+  } catch (e) {
+    // If even fallback fails, swallow to avoid breaking UI
+    console.error('handleMorphdomUpdate fallback error:', e);
+    return;
+  }
+
   // Determine target element and use it as query scope
   var target_element, target_html;
   if (data.last_message_only) {

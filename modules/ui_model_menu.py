@@ -271,7 +271,33 @@ def load_lora_wrapper(selected_loras):
 
 
 def download_model_wrapper(repo_id, specific_file, progress=gr.Progress(), return_links=False, check=False):
-    downloader_module = importlib.import_module("download-model")
+    # Import the downloader module (file at project root: download_model.py)
+    try:
+        downloader_module = importlib.import_module("download_model")
+    except ModuleNotFoundError:
+        # Fallback: load from a bundled source file (when PyInstaller is used
+        # and the module is added as data rather than a Python module)
+        from importlib.machinery import SourceFileLoader
+        from importlib.util import module_from_spec, spec_from_loader
+        candidates = []
+        # Working directory
+        candidates.append(Path('download_model.py'))
+        # Executable directory
+        candidates.append(Path(sys.executable).parent / 'download_model.py')
+        # PyInstaller temp dir (if any)
+        base = Path(getattr(sys, "_MEIPASS", Path.cwd()))
+        candidates.append(base / 'download_model.py')
+        candidates.append(base / '_internal' / 'download_model.py')
+        candidates.append(base / '_internal' / 'download_model.py' / 'download_model.py')
+
+        module_path = next((p for p in candidates if p.exists()), None)
+        if module_path is not None:
+            loader = SourceFileLoader("download_model", str(module_path))
+            spec = spec_from_loader(loader.name, loader)
+            downloader_module = module_from_spec(spec)
+            loader.exec_module(downloader_module)
+        else:
+            raise
     downloader = downloader_module.ModelDownloader()
     update_queue = queue.Queue()
 

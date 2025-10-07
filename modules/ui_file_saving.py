@@ -120,9 +120,10 @@ def handle_save_character_confirm_click(name2, greeting, context, character_pict
 
 def handle_delete_character_confirm_click(character):
     try:
-        index = str(utils.get_available_characters().index(character))
+        available = utils.get_available_characters()
+        idx = available.index(character) if character in available else 0
         chat.delete_character(character)
-        output = chat.update_character_menu_after_deletion(index)
+        output = chat.update_character_menu_after_deletion(str(idx))
     except Exception:
         output = gr.update()
         traceback.print_exc()
